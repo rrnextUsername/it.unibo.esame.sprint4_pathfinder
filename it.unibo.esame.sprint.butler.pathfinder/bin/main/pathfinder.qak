@@ -1,0 +1,288 @@
+ System butler 
+ 
+mqttBroker "localhost" : 1883    //192.168.1.18  192.168.43.229
+
+Dispatch 	movimento			:	movimento( DESTINAZIONE )   
+
+Event 		stopAppl			:	stopAppl
+Event 		reactivateAppl		:	reactivateAppl
+
+Dispatch	setGoal				:	setGoal( X, Y )
+Dispatch	goalReached			:	goalReached
+   
+Dispatch	cmd					:	cmd( CMD, ARG1 )
+Dispatch 	azione				:	azione( AZIONE )
+
+Dispatch	check				:	check( ARG1 ) 		//solo per testing
+Event		makingStep			:	makingStep ( X,Y )	//solo per testing
+Event		obstacle			:	obstacle (DISTANCE )//solo per testing
+Dispatch	removeObstacle		:	removeObstacle
+Dispatch	initObstacle		:	initObstacle
+
+Dispatch	done				: 	done
+
+Dispatch stepFail      			: 	stepFail(R,T)
+Dispatch stepOk       			: 	stepOk(V) 
+Dispatch modelUpdate  			: 	modelUpdate( TARGET, VALUE )
+ 
+ 
+Context ctxButler	   	ip [host="localhost"    port=8038]   -mqtt
+Context ctxRobotMind	ip [host="localhost"    port=8035]   -mqtt
+
+ExternalQActor resourcemodel  context ctxRobotMind
+ExternalQActor onestepahead   context ctxRobotMind
+
+QActor butler context ctxButler{
+	["var sync = false"]
+	
+	State s0 initial {
+		solve( consult("sysRules.pl")	 )  
+				      
+		solve( consult("butlerModel.pl")	 ) 		
+		solve( consult("test.pl")	 )	
+		solve( consult("locationIndex.pl")	 )
+		
+		solve( showResourceModel ) 				
+		
+		//run itunibo.coap.modelResourceCoap.create( myself, "fridge" ) //CoAP access
+		
+	}Goto waitCmd
+	
+	State waitCmd{		
+		run itunibo.butler.butlerResourceModelSupport.updateModelState(myself, "waitCmd")				
+		solve( showResourceModel ) 	
+		
+	} Transition t0 whenMsg cmd -> solveCmd
+	
+	State solveCmd{		
+		onMsg(cmd: cmd (CMD , ARG1)){
+			printCurrentMessage
+			run itunibo.butler.butlerResourceModelSupport.updateModelState(myself, "solveCmd")
+			
+			solve( retract( currentCmd( _,_ )))								//	
+			solve( assert( currentCmd( $payloadArg(0),$payloadArg(1))))		// persist del cmd corrente	
+				
+			solve( comando( $payloadArg(0), $payloadArg(1) ) )	
+		}		
+	} Goto solveAction
+	
+	State solveAction{
+		run itunibo.butler.butlerResourceModelSupport.updateModelState(myself, "solveAction")
+		
+		solve( retract ( azione (ARG0, ARG1, ARG2, ARG3 ) ))
+			
+		if "currentSolution.isSuccess()"{	
+			["val Azione= currentSolution.getVarValue(\"ARG0\").toString()"]
+					
+			if "Azione==\"movimento\"" {
+				["val Destinazione= getCurSol(\"ARG1\").toString()"]
+				forward butler -m movimento : movimento( $Destinazione )
+			}
+			if "Azione==\"check\"" {
+			println("hello3")
+				["val Check= getCurSol(\"ARG1\").toString()"]
+				forward butler -m check : check( $Check)
+			}
+		} else {
+			forward butler -m done : done
+		}
+	} Transition t0 whenMsg done -> waitCmd
+					whenMsg movimento -> azioneMovimento
+					whenMsg check -> azioneCheck
+					whenEvent stopAppl -> stoppedSolvedAction	
+		
+	State azioneMovimento{
+		onMsg(movimento : movimento( DESTINAZIONE ) ){
+			printCurrentMessage
+			
+			solve( location( $payloadArg(0), X, Y))			
+			["val X= getCurSol(\"X\").toString()"]
+			["val Y= getCurSol(\"Y\").toString()"]
+			
+			solve( assert( movingTo($payloadArg(0))))
+			
+			forward pathfinder -m setGoal : setGoal( $X, $Y )
+		}
+	} Transition t0 whenMsg goalReached -> assertMove
+	
+	State assertMove{		
+		solve( retract( movingTo(DEST)))
+		["val Dest= getCurSol(\"DEST\")"]
+		solve( assert( done( movimento, $Dest ) ) )
+		
+	} Goto solveAction
+	
+	State azioneCheck{
+		onMsg(check : check( ARG1 ) ){
+			
+			solve( assert( done( check, $payloadArg(0) ) ) )	
+		}
+	} Goto solveAction
+	
+	//---------------HANDLE APPLICATION STOP/RESTART-------------------------------
+						
+					
+	State stoppedSolvedAction{
+		run itunibo.butler.butlerResourceModelSupport.updateModelState(myself, "stoppedSolvedAction")
+		
+		printCurrentMessage		
+		solve( showResourceModel ) 	
+		
+	} Transition t0 whenEvent reactivateAppl -> restartSolvedAction
+	
+	State restartSolvedAction{		
+		
+		printCurrentMessage
+		solve( showResourceModel ) 		
+			
+	} Transition t0 whenMsg done -> waitCmd
+					whenEvent stopAppl -> stoppedSolvedAction
+}
+
+
+QActor pathfinder context ctxButler{
+	["
+var mapEmpty    = false
+val mapname     = \"roomMapWithTable\" 
+
+var Curmove     = \"\" 
+var curmoveIsForward = false 
+
+//REAL ROBOT
+//var StepTime   = 1000 	 
+//var PauseTime  = 500 
+
+//VIRTUAL ROBOT
+var StepTime   = 330	//for virtual
+var PauseTime  = 500
+
+var PauseTimeL  = PauseTime.toLong()
+"]
+	
+	State s0 initial{
+	    solve( consult("moves.pl")	 )
+		//run itunibo.coap.client.resourceObserverCoapClient.create( "coap://localhost:5683/resourcemodel" )
+ 		run itunibo.planner.plannerUtil.initAI()
+  		run itunibo.planner.moveUtils.loadRoomMap( myself, mapname )	
+  		run itunibo.planner.moveUtils.showCurrentRobotState()
+	 	["	val MapStr =  itunibo.planner.plannerUtil.getMapOneLine()  "]  
+	 	println("MapStr: $MapStr")
+	 	println("&&&  workerinroom STARTED")			
+	}Goto waitGoal
+	
+	State waitGoal{		
+	}Transition t0 whenMsg setGoal -> setGoalAndDo 
+	
+	State setGoalAndDo{
+  		onMsg( setGoal : setGoal(X,Y) ) {
+  			printCurrentMessage
+  			["storeCurrentMessageForReply()"]
+  			run itunibo.planner.plannerUtil.setGoal(payloadArg(0),payloadArg(1))
+  			run itunibo.planner.moveUtils.doPlan( myself )
+  		}
+  	}
+  	Goto executePlannedActions   
+  
+	State executePlannedActions{ 
+		solve( move(M) ) 
+		ifSolved {  
+			["Curmove = getCurSol(\"M\").toString()"] 
+            ["curmoveIsForward=(Curmove == \"w\")"]            
+		} else { 
+			["Curmove = \"\""]
+			["curmoveIsForward=false"]
+		}  
+ 	}
+	Goto checkAndDoAction  if "(Curmove.length>0) " else goalOk 
+
+ 	State goalOk{		  
+ 		run itunibo.planner.moveUtils.showCurrentRobotState()
+	 	["	val MapStr =  itunibo.planner.plannerUtil.getMapOneLine()  "]
+	 	forward resourcemodel -m modelUpdate : modelUpdate(roomMap,$MapStr)   
+	 	["replyToCaller(\"goalReached\", \"goalReached(ok)\")"]  //TODO: introduce a qak operation
+	}Goto waitGoal
+  	
+ 	//Execute the move if it is a rotation or halt
+	State checkAndDoAction{	 }
+	Goto doForwardMove if "curmoveIsForward" else doTheMove
+	  
+	State doTheMove{
+		solve(retract( move(M) ))
+		run itunibo.planner.moveUtils.rotate(myself, Curmove, PauseTime)
+  	}
+	Goto executePlannedActions 
+	
+ 	State doForwardMove{
+ 		delayVar PauseTimeL  //Otherwise is too fast, even with remote interaction
+ 		run itunibo.planner.moveUtils.attemptTomoveAhead(myself, StepTime) //forwards to onestepahead
+ 		
+		
+ 		solve( curPos(X,Y) )
+ 		["val X = getCurSol(\"X\").toString()"]
+ 		["val Y = getCurSol(\"Y\").toString()"]
+ 		println("curPos:	$X, $Y")
+ 		emit makingStep : makingStep( $X, $Y )
+	} 
+	Transition t0   whenEvent stopAppl -> handleStopAppl
+					whenMsg stepOk     -> handleStepOk   
+					whenMsg stepFail   -> hadleStepFail 	
+    	
+    	
+   State handleStopAppl{
+    	println("APPLICATION STOPPED. Waiting for a reactivate")
+    	solve( assert( done( stop )))
+    } 
+    Transition t0  whenEvent reactivateAppl -> handleReactivateAppl
+    
+    State handleReactivateAppl{
+    	println("APPLICATION RESUMED")
+    	solve( assert( done( restart )))
+    } 
+	Transition t0   whenMsg stepOk   -> handleStepOk   
+					whenMsg stepFail -> hadleStepFail 	
+    
+	State handleStepOk{
+ 		run itunibo.planner.moveUtils.updateMapAfterAheadOk(myself)
+ 		solve(retract( move(M) ))
+	}
+	Goto executePlannedActions
+	 
+ 	State hadleStepFail{ 
+ 		onMsg( stepFail : stepFail(RESULT,DURATION)){
+ 			printCurrentMessage
+ 			
+ 			solve( curPos(X,Y) )	
+ 			["val X = getCurSol(\"X\").toString()"]	
+ 			["val Y = getCurSol(\"Y\").toString()"] 	
+			solve( assert( stopped, $X, $Y ))	
+					
+			["val Duration= payloadArg(1).toInt()"]
+			run itunibo.planner.moveUtils.backToCompensate(myself,Duration,PauseTime)
+ 		}
+	} Transition t0 whenTime 2000 -> executePlannedActions
+}
+
+QActor dummy_obstacle context ctxButler{
+	State s0 initial{
+		solve( consult("sysRules.pl")	 )  
+	} Goto waitInit
+	
+	State waitInit{		
+	}Transition t0 whenMsg initObstacle -> waitStep
+	
+	State waitStep{		
+	} Transition t0 whenMsg makingStep -> obstacleAppears
+					whenMsg removeObstacle -> remove
+	
+	State obstacleAppears{
+		onMsg(makingStep : makingStep( 3, 0 )){	
+			printCurrentMessage		
+			solve( assert( done( obstacle, 3, 0)))
+			emit obstacle : obstacle (0)
+		}	
+	} 	Goto waitStep
+	
+	State remove{		
+			solve( assert( done( removeObstacle, 3, 0)))
+	}Goto waitInit
+}
