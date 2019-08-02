@@ -204,15 +204,15 @@ var PauseTimeL  = PauseTime.toLong()
   	
  	//Execute the move if it is a rotation or halt
 	State checkAndDoAction{	 }
-	Goto doForwardMove if "curmoveIsForward" else doTheMove
+	Goto tryMoveForward if "curmoveIsForward" else rotate
 	  
-	State doTheMove{
+	State rotate{
 		solve(retract( move(M) ))
 		run itunibo.planner.moveUtils.rotate(myself, Curmove, PauseTime)
   	}
 	Goto executePlannedActions 
 	
- 	State doForwardMove{
+ 	State tryMoveForward{
  		delayVar PauseTimeL  //Otherwise is too fast, even with remote interaction
  		run itunibo.planner.moveUtils.attemptTomoveAhead(myself, StepTime) //forwards to onestepahead
  		

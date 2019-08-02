@@ -87,17 +87,17 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 				state("checkAndDoAction") { //this:State
 					action { //it:State
 					}
-					 transition( edgeName="goto",targetState="doForwardMove", cond=doswitchGuarded({curmoveIsForward}) )
-					transition( edgeName="goto",targetState="doTheMove", cond=doswitchGuarded({! curmoveIsForward}) )
+					 transition( edgeName="goto",targetState="tryMoveForward", cond=doswitchGuarded({curmoveIsForward}) )
+					transition( edgeName="goto",targetState="rotate", cond=doswitchGuarded({! curmoveIsForward}) )
 				}	 
-				state("doTheMove") { //this:State
+				state("rotate") { //this:State
 					action { //it:State
 						solve("retract(move(M))","") //set resVar	
 						itunibo.planner.moveUtils.rotate(myself ,Curmove, PauseTime )
 					}
 					 transition( edgeName="goto",targetState="executePlannedActions", cond=doswitch() )
 				}	 
-				state("doForwardMove") { //this:State
+				state("tryMoveForward") { //this:State
 					action { //it:State
 						delay(PauseTimeL)
 						itunibo.planner.moveUtils.attemptTomoveAhead(myself ,StepTime )
