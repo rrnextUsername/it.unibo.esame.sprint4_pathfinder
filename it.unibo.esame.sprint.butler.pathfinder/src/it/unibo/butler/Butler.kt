@@ -55,8 +55,7 @@ class Butler ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, scop
 						if(Azione=="movimento"){ val Destinazione= getCurSol("ARG1").toString()
 						forward("movimento", "movimento($Destinazione)" ,"butler" ) 
 						 }
-						if(Azione=="check"){ println("hello3")
-						val Check= getCurSol("ARG1").toString()
+						if(Azione=="check"){ val Check= getCurSol("ARG1").toString()
 						forward("check", "check($Check)" ,"butler" ) 
 						 }
 						 }

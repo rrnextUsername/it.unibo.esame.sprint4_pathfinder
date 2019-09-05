@@ -1,4 +1,25 @@
- System butler 
+/*	REQUIREMENTS:
+ * 		->	Finally, the RBR must be able to avoid the impact with mobile obstacles (e.g. the Maitre or other humans / animals present in the room).
+ * 	
+ * 	BACKLOG ITEM:
+ * 		->	BUTLER in grado di muoversi per la stanza autonomamente 
+ *		->	BUTLER in grado di fermarsi se incontra ostacoli
+ * 
+ * 	SPRINT GOAL:
+ *		->	il butler deve poter comandare la robotmind sottostante
+ * 		->	il butler deve potersi fermare se incontra un ostacolo
+ * 		->	il butler deve poter riconoscere le coordinate di una location da una lista prefissata
+ * 		->	il butler deve interrompere l'esecuzione di azioni su stop e riprenderla su restart
+ * 			->	il pathfinder si deve comportare allo stesso modo
+ * 
+ * 	SPRINT RETROSPECTIVE:
+ * 		->	la configurazione del pathfinder potrebbe avvenire facilmente da un file di prolog
+ */ 
+ 
+ 
+ 
+ 
+System butler 
  
 mqttBroker "localhost" : 1883    //192.168.1.18  192.168.43.229
 
@@ -9,6 +30,8 @@ Event 		reactivateAppl		:	reactivateAppl
 
 Dispatch	setGoal				:	setGoal( X, Y )
 Dispatch	goalReached			:	goalReached
+Dispatch 	internalMoveForward	:	internalMoveForward 
+Dispatch 	internalRotate		:	internalRotate
    
 Dispatch	cmd					:	cmd( CMD, ARG1 )
 Dispatch 	azione				:	azione( AZIONE )
@@ -79,7 +102,6 @@ QActor butler context ctxButler{
 				forward butler -m movimento : movimento( $Destinazione )
 			}
 			if "Azione==\"check\"" {
-			println("hello3")
 				["val Check= getCurSol(\"ARG1\").toString()"]
 				forward butler -m check : check( $Check)
 			}
@@ -203,8 +225,18 @@ var PauseTimeL  = PauseTime.toLong()
 	}Goto waitGoal
   	
  	//Execute the move if it is a rotation or halt
-	State checkAndDoAction{	 }
-	Goto tryMoveForward if "curmoveIsForward" else rotate
+	State checkAndDoAction{	
+		if "curmoveIsForward" {
+			forward pathfinder -m internalMoveForward : internalMoveForward
+		} else {			
+			forward pathfinder -m internalRotate : internalRotate
+		}
+	}Transition t0 	whenTimeVar	PauseTimeL ->  doMovement
+					whenEvent 	stopAppl -> handleStopAppl
+					
+	State doMovement{		
+	} Transition t0 whenMsg 	internalMoveForward -> tryMoveForward 
+					whenMsg 	internalRotate -> rotate
 	  
 	State rotate{
 		solve(retract( move(M) ))
@@ -213,7 +245,6 @@ var PauseTimeL  = PauseTime.toLong()
 	Goto executePlannedActions 
 	
  	State tryMoveForward{
- 		delayVar PauseTimeL  //Otherwise is too fast, even with remote interaction
  		run itunibo.planner.moveUtils.attemptTomoveAhead(myself, StepTime) //forwards to onestepahead
  		
 		
@@ -223,8 +254,7 @@ var PauseTimeL  = PauseTime.toLong()
  		println("curPos:	$X, $Y")
  		emit makingStep : makingStep( $X, $Y )
 	} 
-	Transition t0   whenEvent stopAppl -> handleStopAppl
-					whenMsg stepOk     -> handleStepOk   
+	Transition t0   whenMsg stepOk     -> handleStepOk   
 					whenMsg stepFail   -> hadleStepFail 	
     	
     	
@@ -238,8 +268,8 @@ var PauseTimeL  = PauseTime.toLong()
     	println("APPLICATION RESUMED")
     	solve( assert( done( restart )))
     } 
-	Transition t0   whenMsg stepOk   -> handleStepOk   
-					whenMsg stepFail -> hadleStepFail 	
+	Transition t0   whenMsg 	internalMoveForward -> tryMoveForward 
+					whenMsg 	internalRotate -> rotate
     
 	State handleStepOk{
  		run itunibo.planner.moveUtils.updateMapAfterAheadOk(myself)

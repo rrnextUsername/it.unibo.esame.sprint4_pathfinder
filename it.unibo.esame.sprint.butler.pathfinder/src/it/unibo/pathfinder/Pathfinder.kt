@@ -86,9 +86,22 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 				}	 
 				state("checkAndDoAction") { //this:State
 					action { //it:State
+						if(curmoveIsForward){ forward("internalMoveForward", "internalMoveForward" ,"pathfinder" ) 
+						 }
+						else
+						 { forward("internalRotate", "internalRotate" ,"pathfinder" ) 
+						  }
+						stateTimer = TimerActor("timer_checkAndDoAction", 
+							scope, context!!, "local_tout_pathfinder_checkAndDoAction", PauseTimeL )
 					}
-					 transition( edgeName="goto",targetState="tryMoveForward", cond=doswitchGuarded({curmoveIsForward}) )
-					transition( edgeName="goto",targetState="rotate", cond=doswitchGuarded({! curmoveIsForward}) )
+					 transition(edgeName="t010",targetState="doMovement",cond=whenTimeout("local_tout_pathfinder_checkAndDoAction"))   
+					transition(edgeName="t011",targetState="handleStopAppl",cond=whenEvent("stopAppl"))
+				}	 
+				state("doMovement") { //this:State
+					action { //it:State
+					}
+					 transition(edgeName="t012",targetState="tryMoveForward",cond=whenDispatch("internalMoveForward"))
+					transition(edgeName="t013",targetState="rotate",cond=whenDispatch("internalRotate"))
 				}	 
 				state("rotate") { //this:State
 					action { //it:State
@@ -99,7 +112,6 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 				}	 
 				state("tryMoveForward") { //this:State
 					action { //it:State
-						delay(PauseTimeL)
 						itunibo.planner.moveUtils.attemptTomoveAhead(myself ,StepTime )
 						solve("curPos(X,Y)","") //set resVar	
 						val X = getCurSol("X").toString()
@@ -107,24 +119,23 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 						println("curPos:	$X, $Y")
 						emit("makingStep", "makingStep($X,$Y)" ) 
 					}
-					 transition(edgeName="t010",targetState="handleStopAppl",cond=whenEvent("stopAppl"))
-					transition(edgeName="t011",targetState="handleStepOk",cond=whenDispatch("stepOk"))
-					transition(edgeName="t012",targetState="hadleStepFail",cond=whenDispatch("stepFail"))
+					 transition(edgeName="t014",targetState="handleStepOk",cond=whenDispatch("stepOk"))
+					transition(edgeName="t015",targetState="hadleStepFail",cond=whenDispatch("stepFail"))
 				}	 
 				state("handleStopAppl") { //this:State
 					action { //it:State
 						println("APPLICATION STOPPED. Waiting for a reactivate")
 						solve("assert(done(stop))","") //set resVar	
 					}
-					 transition(edgeName="t013",targetState="handleReactivateAppl",cond=whenEvent("reactivateAppl"))
+					 transition(edgeName="t016",targetState="handleReactivateAppl",cond=whenEvent("reactivateAppl"))
 				}	 
 				state("handleReactivateAppl") { //this:State
 					action { //it:State
 						println("APPLICATION RESUMED")
 						solve("assert(done(restart))","") //set resVar	
 					}
-					 transition(edgeName="t014",targetState="handleStepOk",cond=whenDispatch("stepOk"))
-					transition(edgeName="t015",targetState="hadleStepFail",cond=whenDispatch("stepFail"))
+					 transition(edgeName="t017",targetState="tryMoveForward",cond=whenDispatch("internalMoveForward"))
+					transition(edgeName="t018",targetState="rotate",cond=whenDispatch("internalRotate"))
 				}	 
 				state("handleStepOk") { //this:State
 					action { //it:State
@@ -148,7 +159,7 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 						stateTimer = TimerActor("timer_hadleStepFail", 
 							scope, context!!, "local_tout_pathfinder_hadleStepFail", 2000.toLong() )
 					}
-					 transition(edgeName="t016",targetState="executePlannedActions",cond=whenTimeout("local_tout_pathfinder_hadleStepFail"))   
+					 transition(edgeName="t019",targetState="executePlannedActions",cond=whenTimeout("local_tout_pathfinder_hadleStepFail"))   
 				}	 
 			}
 		}

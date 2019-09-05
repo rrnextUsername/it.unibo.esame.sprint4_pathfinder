@@ -44,6 +44,7 @@ class TestDestinationReachedStopAppl {
 		solveCheckGoal(pathfinder!!,"done(stop)")
 		solveCheckGoal(pathfinder!!,"done(restart)")
 		solveCheckGoal(pathfinder!!,"curPos(5,0)")
+		sendHomeMessage(butler!!,7000)
  	}
 //----------------------------------------
 	
@@ -51,6 +52,15 @@ class TestDestinationReachedStopAppl {
 		actor.scope.launch{
 			println("--- sendCmdMessage cmd(testDestination, null)")
   			MsgUtil.sendMsg("cmd","cmd(testDestination,null)",actor)
+ 		}
+		delay(time) //give time to do the move
+  	}
+	
+	
+	fun sendHomeMessage( actor : ActorBasic, time : Long ){
+		actor.scope.launch{
+			println("--- sendCmdMessage cmd(goHome, null)")
+  			MsgUtil.sendMsg("cmd","cmd(goHome,null)",actor)
  		}
 		delay(time) //give time to do the move
   	}
