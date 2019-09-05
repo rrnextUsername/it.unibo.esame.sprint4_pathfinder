@@ -79,7 +79,7 @@ class Pathfinder ( name: String, scope: CoroutineScope ) : ActorBasicFsm( name, 
 					action { //it:State
 						itunibo.planner.moveUtils.showCurrentRobotState(  )
 							val MapStr =  itunibo.planner.plannerUtil.getMapOneLine()  
-						forward("modelUpdate", "modelUpdate(roomMap,$MapStr)" ,"resourcemodel" ) 
+						emit("modelUpdate", "modelUpdate(roomMap,$MapStr)" ) 
 						replyToCaller("goalReached", "goalReached(ok)")
 					}
 					 transition( edgeName="goto",targetState="waitGoal", cond=doswitch() )

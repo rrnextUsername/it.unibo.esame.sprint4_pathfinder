@@ -46,14 +46,10 @@ Dispatch	done				: 	done
 
 Dispatch stepFail      			: 	stepFail(R,T)
 Dispatch stepOk       			: 	stepOk(V) 
-Dispatch modelUpdate  			: 	modelUpdate( TARGET, VALUE )
+Event modelUpdate  			: 	modelUpdate( TARGET, VALUE )
  
  
 Context ctxButler	   	ip [host="localhost"    port=8038]   -mqtt
-Context ctxRobotMind	ip [host="localhost"    port=8035]   -mqtt
-
-ExternalQActor resourcemodel  context ctxRobotMind
-ExternalQActor onestepahead   context ctxRobotMind
 
 QActor butler context ctxButler{
 	["var sync = false"]
@@ -220,7 +216,7 @@ var PauseTimeL  = PauseTime.toLong()
  	State goalOk{		  
  		run itunibo.planner.moveUtils.showCurrentRobotState()
 	 	["	val MapStr =  itunibo.planner.plannerUtil.getMapOneLine()  "]
-	 	forward resourcemodel -m modelUpdate : modelUpdate(roomMap,$MapStr)   
+	 	emit modelUpdate : modelUpdate(roomMap,$MapStr)   
 	 	["replyToCaller(\"goalReached\", \"goalReached(ok)\")"]  //TODO: introduce a qak operation
 	}Goto waitGoal
   	
