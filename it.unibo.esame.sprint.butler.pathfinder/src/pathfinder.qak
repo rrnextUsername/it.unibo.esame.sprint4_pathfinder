@@ -2,8 +2,8 @@
  * 		->	Finally, the RBR must be able to avoid the impact with mobile obstacles (e.g. the Maitre or other humans / animals present in the room).
  * 	
  * 	BACKLOG ITEM:
- * 		->	BUTLER in grado di muoversi per la stanza autonomamente 
- *		->	BUTLER in grado di fermarsi se incontra ostacoli
+ * 		->	4
+ *		->	16
  * 
  * 	SPRINT GOAL:
  *		->	il butler deve poter comandare la robotmind sottostante
